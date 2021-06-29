@@ -6,8 +6,6 @@ from time import sleep
 def demo():
     s = twitch.connect()
 
-
-
     counter = 0
     l = []
     thread = threading.Thread(target=twitch.checkChat, args=(s, l, ))

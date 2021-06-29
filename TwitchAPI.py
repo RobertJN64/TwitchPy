@@ -41,10 +41,13 @@ def connect():
 
 def checkChat(s, l):
     """Check for chat updates on the server"""
-    resp = s.recv(2048).decode('utf-8')
+    try:
+        resp = s.recv(2048).decode('utf-8')
 
-    if resp.startswith('PING'):
-        s.send("PONG\n".encode('utf-8'))
+        if resp.startswith('PING'):
+            s.send("PONG\n".encode('utf-8'))
 
-    elif len(resp) > 0 and 'PRIVMSG' in resp:
-        l.append(parseCommand(resp))
+        elif len(resp) > 0 and 'PRIVMSG' in resp:
+            l.append(parseCommand(resp))
+    except ConnectionAbortedError:
+        pass #fail quietly on shutdown

@@ -1,14 +1,19 @@
 import pygame
 import math
+import PythonExtended.Pygame as pyg
+import TwitchAPI as twitch
+import threading
+import random
 
-def overlap(a, b):
+def overlap(a, b, size=30):
     x1 = a[0]
     y1 = a[1]
     x2 = b[0]
     y2 = b[1]
 
-    return math.pow((x1 - x2), 2) + math.pow((y1 - y2), 2) < 30
+    return math.pow((x1 - x2), 2) + math.pow((y1 - y2), 2) < size
 
+#region classes
 class Player:
     def __init__(self, x, y):
         self.x = x
@@ -69,7 +74,6 @@ class Bullet:
         self.bounces = 0
         self.timer = 0
 
-
     def updatePos(self, screen):
         self.x += 4 * math.sin(math.radians(self.rot))
         self.y += 4 * math.cos(math.radians(self.rot + 180))
@@ -102,9 +106,29 @@ class Bullet:
     def shouldDelete(self, playerx, playery):
         return self.timer > 20 or overlap((playerx, playery), (self.x, self.y))
 
+class Enemy:
+    def __init__(self, x, y):
+        self.x = x
+        self.y = y
 
+    def draw(self, screen):
+        pygame.draw.circle(screen, (0, 0, 0), (self.x, self.y), 20)
+
+    def checkOverlaps(self, bullets):
+        for bullet in bullets:
+            if overlap((bullet.x, bullet.y), (self.x, self.y), 50):
+                return bullet
+        return None
+#endregion
+
+def spawnEnemy(screen):
+    return Enemy(random.randint(20, screen.get_rect().width - 20),
+                 random.randint(20, screen.get_rect().height - 20))
 
 def run():
+    print("Connecting to twitch servers...")
+    s = twitch.connect()
+
     #region Reset + Init
     pygame.init()
     screen = pygame.display.set_mode((600, 600), pygame.RESIZABLE)
@@ -113,12 +137,32 @@ def run():
 
     player = Player(screen.get_rect().centerx, screen.get_rect().centery)
     bullets = []
+    enemies = []
+    #endregion
+    #region threads
+    l = []
+    thread = threading.Thread(target=twitch.checkChat, args=(s, l,))
+    thread.start()
+    lastmessage = "Waiting for message...."
     #endregion
 
     done = False
     while not done:
+        #region threads
+        if not thread.is_alive():
+            if len(l) > 0:
+                lastmessage = l[0]
+                if lastmessage == "!enemy":
+                    enemies.append(spawnEnemy(screen))
+            l = []
+            thread = threading.Thread(target=twitch.checkChat, args=(s, l,))
+            thread.start()
+        #endregion
+
         screen.fill((50,50,50))
-        #print(clock.get_fps())
+        pyg.message_display(screen, "FPS: " + str(round(clock.get_fps())), (screen.get_rect().width-30,20), size=15)
+        pyg.message_display(screen, "Twitch chat: " + str(lastmessage),
+                            (screen.get_rect().width/2, screen.get_rect().height-20), color = (200,200,200), size=20)
 
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -151,6 +195,8 @@ def run():
         for bullet in bullets:
             bullet.updatePos(screen)
             bullet.draw(screen)
+        for enemie in enemies:
+            enemie.draw(screen)
 
         player.checkOverlaps(bullets)
 
@@ -158,5 +204,13 @@ def run():
             if bullets[i].shouldDelete(player.x, player.y):
                 bullets.pop(i)
 
+        for i in range(len(enemies) -1, -1, -1):
+            bullet = enemies[i].checkOverlaps(bullets)
+            if bullet is not None:
+                enemies.pop(i)
+                bullets.remove(bullet)
+
         pygame.display.flip()
         clock.tick(50)
+
+    s.close()
