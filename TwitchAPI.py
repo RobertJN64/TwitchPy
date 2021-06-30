@@ -22,6 +22,10 @@ def parseCommand(message):
     i = str(message).index(':', 1)
     return message[i + 1:].strip('\n').strip('\r')
 
+def parseSender(message):
+    i = str(message).index('!')
+    return message[1:i]
+
 def connect():
     """Connect to the server and return a working socket"""
     server = 'irc.twitch.tv'
@@ -39,7 +43,7 @@ def connect():
 
     return s
 
-def checkChat(s, l):
+def checkChat(s, d):
     """Check for chat updates on the server"""
     try:
         resp = s.recv(2048).decode('utf-8')
@@ -48,6 +52,7 @@ def checkChat(s, l):
             s.send("PONG\n".encode('utf-8'))
 
         elif len(resp) > 0 and 'PRIVMSG' in resp:
-            l.append(parseCommand(resp))
-    except ConnectionAbortedError:
+            d["message"] = parseCommand(resp)
+            d["sender"] = parseSender(resp)
+    except (ConnectionAbortedError, ConnectionResetError):
         pass #fail quietly on shutdown
